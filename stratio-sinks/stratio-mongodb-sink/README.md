@@ -28,16 +28,17 @@ used as a fallback.
   - `SAVE` *(default)*: a MongoDB save operation.
   - `ADD_TO_SET`: an $addToSet MongoDB update operation.
   - `SET`: a $set MongoDB update operation.
+  - `SET_ON_INSERT`: a $setOnInsert MongoDB update operation.
   - `UPDATE`: a MongoDB update operation.
 
 
-- `idFieldName` *(string, required)* *[only for ADD_TO_SET | SET | UPDATE saveOperation]*: this is the field to use as the identifier for executing the save operations.
+- `idFieldName` *(string, required)* *[only for ADD_TO_SET | SET | UPDATE | SET_ON_INSERT saveOperation]*: this is the field to use as the identifier for executing the save operations.
 
-- `fieldName` *(string, required)* *[only for ADD_TO_SET]*: this is the field which is going to be updated.
+- `fieldName` *(string, required)* *[only for ADD_TO_SET | SET_ON_INSERT]*: this is the field which is going to be updated.
 
 - `upsertUpdate` *(boolean)* *[only for ADD_TO_SET | SET | UPDATE saveOperation]*:  If true, the update operation will create the document if it would not exist.
 
-- `multiUpdate` *(boolean)* *[only for ADD_TO_SET | SET | UPDATE saveOperation]*:  If true, the update operation will modify all the documents which have that id. If false, it will only update the first one.
+- `multiUpdate` *(boolean)* *[only for ADD_TO_SET | SET | UPDATE | SET_ON_INSERT saveOperation]*:  If true, the update operation will modify all the documents which have that id. If false, it will only update the first one.
 
 Type mapping
 ============
