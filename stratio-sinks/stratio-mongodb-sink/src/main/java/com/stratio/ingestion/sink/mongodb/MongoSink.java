@@ -15,44 +15,26 @@
  */
 package com.stratio.ingestion.sink.mongodb;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
+import com.mongodb.*;
+import com.stratio.ingestion.sink.mongodb.exception.MongoSinkException;
 import org.apache.commons.lang.StringUtils;
-import org.apache.flume.Channel;
-import org.apache.flume.ChannelException;
-import org.apache.flume.Context;
-import org.apache.flume.Event;
-import org.apache.flume.EventDeliveryException;
-import org.apache.flume.Transaction;
+import org.apache.flume.*;
 import org.apache.flume.conf.Configurable;
 import org.apache.flume.instrumentation.SinkCounter;
 import org.apache.flume.sink.AbstractSink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.mongodb.BasicDBList;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientOptions;
-import com.mongodb.MongoClientURI;
-import com.mongodb.WriteConcern;
-import com.mongodb.WriteResult;
-import com.stratio.ingestion.sink.mongodb.exception.MongoSinkException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.*;
 
 /**
- *
  * Reads events from a channel and writes them to MongoDB. It can read fields
  * from both body and headers.
- *
+ * <p>
  * Configuration parameters are:
- *
+ * <p>
  * <p>
  * <ul>
  * <li><tt>dynamic</tt> <em>(boolean)</em>: If true, the dynamic mode will be
@@ -74,7 +56,6 @@ import com.stratio.ingestion.sink.mongodb.exception.MongoSinkException;
  * purposes.</li>
  * </ul>
  * </p>
- *
  */
 public class MongoSink extends AbstractSink implements Configurable {
 
@@ -100,7 +81,7 @@ public class MongoSink extends AbstractSink implements Configurable {
     private static final boolean DEFAULT_MULTI_UPDATE = false;
 
     public static enum SAVE_OPERATION {
-        ADD_TO_SET, SAVE, SET, UPDATE, SET_ON_INSERT;
+        ADD_TO_SET, SAVE, SET, UPDATE;
     }
 
     private SinkCounter sinkCounter;
@@ -161,7 +142,7 @@ public class MongoSink extends AbstractSink implements Configurable {
             this.sinkCounter = new SinkCounter(this.getName());
             this.batchSize = context.getInteger(CONF_BATCH_SIZE, DEFAULT_BATCH_SIZE);
 
-            if (this.saveOperation.equals(SAVE_OPERATION.ADD_TO_SET) || this.saveOperation.equals(SAVE_OPERATION.SET) || this.saveOperation.equals(SAVE_OPERATION.UPDATE) || this.saveOperation.equals(SAVE_OPERATION.SET_ON_INSERT)) {
+            if (this.saveOperation.equals(SAVE_OPERATION.ADD_TO_SET) || this.saveOperation.equals(SAVE_OPERATION.SET) || this.saveOperation.equals(SAVE_OPERATION.UPDATE)) {
                 this.idFieldName = context.getString(CONF_ID_FIELD_NAME, null);
                 this.fieldName = context.getString(CONF_FIELD_NAME, null);
 
@@ -188,12 +169,13 @@ public class MongoSink extends AbstractSink implements Configurable {
      */
     @Override
     public Status process() throws EventDeliveryException {
+
         Status status = Status.BACKOFF;
         Transaction transaction = this.getChannel().getTransaction();
-
         log.debug("Executing MongoSink.process");
 
         try {
+
             transaction.begin();
             List<Event> eventList = this.takeEventsFromChannel(
                     this.getChannel(), this.batchSize);
@@ -256,8 +238,10 @@ public class MongoSink extends AbstractSink implements Configurable {
                             value.put(this.fieldName, each);
 
                             updateQuery.append("$addToSet", value);
+                            updateQuery.append("$setOnInsert", generateSetOnInsert());
 
-                            WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, this.upsertUpdate, this.multiUpdate);
+
+                            WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, true, this.multiUpdate);
 
                             if (result == null || result.getN() == 0) {
                                 log.info(String.format("The %s opperation has not modified any document. Please revise the configuration.", this.saveOperation));
@@ -279,28 +263,8 @@ public class MongoSink extends AbstractSink implements Configurable {
 
                             updateQuery.append("$set", document);
 
-                            WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, this.upsertUpdate, this.multiUpdate);
 
-                            if (result == null || result.getN() == 0) {
-                                log.info(String.format("The %s opperation has not modified any document. Please revise the configuration.", this.saveOperation));
-                            }
-
-                            break;
-                        }
-                        case SET_ON_INSERT: {
-                            if (document.get(this.idFieldName) == null) {
-                                log.info(String.format("Cannot execute %s operation because %s is empty: \n%s", this.saveOperation, this.idFieldName, document.toString()));
-
-                                throw new MongoSinkException(String.format("Cannot execute %s operation because %s is empty", this.saveOperation, this.idFieldName));
-                            }
-
-                            BasicDBObject searchQuery = new BasicDBObject();
-                            searchQuery.append(this.idFieldName, document.get(this.idFieldName));
-
-                            BasicDBObject updateQuery = new BasicDBObject();
-
-                            updateQuery.append("$setOnInsert", document);
-
+                            updateQuery.append("$setOnInsert", generateSetOnInsert());
 
                             WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, true, this.multiUpdate);
 
@@ -365,6 +329,27 @@ public class MongoSink extends AbstractSink implements Configurable {
             transaction.close();
         }
         return status;
+    }
+
+    public BasicDBObject generateSetOnInsert() {
+        Properties onInsertSetProp = new Properties();
+        InputStream input = ClassLoader.getSystemResourceAsStream("onInsertFieldNames.properties");
+        try {
+            onInsertSetProp.load(input);
+        } catch (IOException e) {
+            throw new MongoSinkException("No valid properties file");
+        }
+
+        BasicDBObject setOIDoc = new BasicDBObject();
+
+        Set<String> setFields = onInsertSetProp.stringPropertyNames();
+
+        for (String soiField : setFields) {
+            setOIDoc.put(soiField, onInsertSetProp.get(soiField).toString());
+        }
+
+        return setOIDoc;
+
     }
 
     /**

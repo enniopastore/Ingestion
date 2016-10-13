@@ -40,6 +40,12 @@ used as a fallback.
 
 - `multiUpdate` *(boolean)* *[only for ADD_TO_SET | SET | UPDATE | SET_ON_INSERT saveOperation]*:  If true, the update operation will modify all the documents which have that id. If false, it will only update the first one.
 
+Set On Insert
+=============
+The mongodb sink support also the $setOnInsert MongoDB save operation (https://docs.mongodb.com/manual/reference/operator/update/setOnInsert/)
+You can set the pair field-value to put in the setOnInsert from the onInsertFieldNames.properties file.
+The $setOnInsert operation will be automatically added to each $set and $addToSet operation.
+
 Type mapping
 ============
 
