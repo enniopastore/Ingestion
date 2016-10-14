@@ -236,9 +236,8 @@ public class MongoSink extends AbstractSink implements Configurable {
 
                             BasicDBObject value = new BasicDBObject();
                             value.put(this.fieldName, each);
-
+                            updateQuery.append("$setOnInsert", generateSetOnInsert(value));
                             updateQuery.append("$addToSet", value);
-                            updateQuery.append("$setOnInsert", generateSetOnInsert());
 
 
                             WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, true, this.multiUpdate);
@@ -260,11 +259,9 @@ public class MongoSink extends AbstractSink implements Configurable {
                             searchQuery.append(this.idFieldName, document.get(this.idFieldName));
 
                             BasicDBObject updateQuery = new BasicDBObject();
-
+                            updateQuery.append("$setOnInsert", generateSetOnInsert(document));
                             updateQuery.append("$set", document);
 
-
-                            updateQuery.append("$setOnInsert", generateSetOnInsert());
 
                             WriteResult result = getDBCollection(event).update(searchQuery, updateQuery, true, this.multiUpdate);
 
@@ -331,21 +328,25 @@ public class MongoSink extends AbstractSink implements Configurable {
         return status;
     }
 
-    public BasicDBObject generateSetOnInsert() {
+    public BasicDBObject generateSetOnInsert(DBObject document) {
         Properties onInsertSetProp = new Properties();
-        InputStream input = ClassLoader.getSystemResourceAsStream("onInsertFieldNames.properties");
+        InputStream input = ClassLoader.getSystemResourceAsStream("fields.properties");
         try {
             onInsertSetProp.load(input);
         } catch (IOException e) {
             throw new MongoSinkException("No valid properties file");
         }
 
+
         BasicDBObject setOIDoc = new BasicDBObject();
 
-        Set<String> setFields = onInsertSetProp.stringPropertyNames();
+        List<String> ltFields = Arrays.asList(onInsertSetProp.get("onInsertFieldNames").toString().split(","));
 
-        for (String soiField : setFields) {
-            setOIDoc.put(soiField, onInsertSetProp.get(soiField).toString());
+        for (String soiField : ltFields) {
+            if (document.containsField(soiField)) {
+                setOIDoc.put(soiField, document.get(soiField).toString());
+                document.removeField(soiField);
+            }
         }
 
         return setOIDoc;

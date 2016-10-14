@@ -175,13 +175,20 @@ public class MongoSinkSaveOperationsTest {
         jsonBody1.put("doc_id", "123456");
         jsonBody1.put("field_1", "value_1");
         jsonBody1.put("field_2", "value_2");
-        jsonBody1.put("field_3", "value_3");
-        
+        jsonBody1.put("field_example_1", "vfe1");
+        jsonBody1.put("field_example_2", "vfe2");
+
+        ObjectNode jsonBody2 = new ObjectNode(JsonNodeFactory.instance);
+        jsonBody2.put("doc_id", "1234567");
+        jsonBody2.put("field_1", "value_1_2");
+        jsonBody2.put("field_example_1", "vfe1");
+        jsonBody2.put("field_example_2", "vfe2");
 
         ObjectNode jsonBody3 = new ObjectNode(JsonNodeFactory.instance);
         jsonBody3.put("doc_id", "1234567");
-        jsonBody3.put("field_1", "value_1_2");
-        jsonBody3.put("field_2", "value_2_2");
+        jsonBody3.put("field_1", "value_1_3");
+        jsonBody3.put("field_example_1", "vfe3");
+        jsonBody3.put("field_example_2", "vfe2");
 
         {
             Transaction tx = channel.getTransaction();
@@ -202,10 +209,34 @@ public class MongoSinkSaveOperationsTest {
             assertThat(result.get("doc_id")).isEqualTo("123456");
             assertThat(result.get("field_1")).isEqualTo("value_1");
             assertThat(result.get("field_2")).isEqualTo("value_2");
-            assertThat(result.get("field_3")).isEqualTo("value_3");
-
         }
 
+
+        setField(mongoSink, "saveOperation", com.stratio.ingestion.sink.mongodb.MongoSink.SAVE_OPERATION.SET);
+        setField(mongoSink, "idFieldName", "doc_id");
+
+        {
+            Transaction tx = channel.getTransaction();
+            tx.begin();
+
+            Event event = EventBuilder.withBody(jsonBody2.toString().getBytes(Charsets.UTF_8));
+            channel.put(event);
+
+            tx.commit();
+            tx.close();
+
+            mongoSink.process();
+
+            DBCursor result = fongo.getDB("test").getCollection("test").find();
+            List<DBObject> listDBObject = result.toArray();
+
+
+            assertThat(result.count()).isEqualTo(2);
+            assertThat(listDBObject.get(0).get("doc_id")).isEqualTo("123456");
+            assertThat(listDBObject.get(1).get("doc_id")).isEqualTo("1234567");
+            assertThat(listDBObject.get(1).get("field_example_1")).isEqualTo("vfe1");
+
+        }
 
         setField(mongoSink, "saveOperation", com.stratio.ingestion.sink.mongodb.MongoSink.SAVE_OPERATION.SET);
         setField(mongoSink, "idFieldName", "doc_id");
@@ -229,8 +260,8 @@ public class MongoSinkSaveOperationsTest {
             assertThat(result.count()).isEqualTo(2);
             assertThat(listDBObject.get(0).get("doc_id")).isEqualTo("123456");
             assertThat(listDBObject.get(1).get("doc_id")).isEqualTo("1234567");
-            assertThat(listDBObject.get(1).get("field_example_1")).isEqualTo("test1");
-
+            assertThat(listDBObject.get(1).get("field_1")).isEqualTo("value_1_3");
+            assertThat(listDBObject.get(1).get("field_example_1")).isEqualTo("vfe1");
 
         }
 
