@@ -344,7 +344,7 @@ public class MongoSink extends AbstractSink implements Configurable {
 
         for (String soiField : ltFields) {
             if (document.containsField(soiField)) {
-                setOIDoc.put(soiField, document.get(soiField).toString());
+                setOIDoc.put(soiField, document.get(soiField));
                 document.removeField(soiField);
             }
         }
